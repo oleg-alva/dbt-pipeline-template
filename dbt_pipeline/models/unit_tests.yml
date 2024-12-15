@@ -1,0 +1,340 @@
+
+unit_tests:
+  - name: test_is_correct_expected_usage
+    model: usage_by_organization
+    overrides:
+      macros:
+        run_started_at: '2024-09-30 12:00:00.000000+00:00'
+    given:
+      - input: ref('link_current_terms')
+        rows:
+          - {
+            organization_id: "normal-case",
+            order_id: "O-001318",
+            term: "1",
+            term_start_date: "2024-09-16",
+            term_end_date: "2024-10-15"
+          }
+          - {
+            organization_id: "zero-scope",
+            order_id: "x",
+            term: "12",
+            term_start_date: "2023-10-01",
+            term_end_date: "2024-09-30"
+          }
+          - {
+            organization_id: "no-activations",
+            order_id: "y",
+            term: "12",
+            term_start_date: "2024-09-16",
+            term_end_date: "2025-09-15"
+          }
+      - input: ref('dim_active_contracts')
+        rows:
+          - {
+              charge_id: "631b8e1934852b5df6adbb4f3aaa1d87",
+              order_id: "O-001318",
+              organization_id: "normal-case",
+              organization_name: "Test",
+              account_id: "A-000966",
+              account_name: "Test AB",
+              term: "1",
+              scope: "30.0",
+              pricing_plan: "Enterprise",
+              pricing_model: "Per-job-position",
+              monthly_recurring_revenue: "23180.0",
+              start_date: "2024-01-16",
+              end_date: "2025-01-15"
+            }
+          - {
+              charge_id: "a",
+              order_id: "x",
+              organization_id: "zero-scope",
+              organization_name: "Zero Scope",
+              term: "12",
+              scope: "0",
+              pricing_plan: "Unlimited",
+              pricing_model: "Unlimited",
+              start_date: "2023-10-01",
+              end_date: "2024-09-30"
+          }
+          - {
+              charge_id: "b",
+              order_id: "y",
+              organization_id: "no-activations",
+              organization_name: "No Activations",
+              term: "12",
+              scope: "100",
+              pricing_plan: "Enterprise",
+              pricing_model: "Per-job-position",
+              start_date: "2024-09-16",
+              end_date: "2025-09-15"
+          }
+      - input: ref('fact_job_activations')
+        rows: 
+          - {
+              job_activation_id: "1622738ca007e7dc4d89ffc86524e4ce",
+              job_position_id: "996891",
+              activated_date: "2024-08-19",
+              organization_id: "normal-case",
+              reactivation: FALSE
+            }
+          - {
+              job_activation_id: "1622738ca007e7dc4d89ffc86524e4cf",
+              job_position_id: "996891",
+              activated_date: "2024-09-19",
+              organization_id: "normal-case",
+              reactivation: TRUE
+            }
+          - {
+              job_activation_id: "d19e9a5fbeaa7446eb05ff4309b90209",
+              job_position_id: "1350603",
+              activated_date: "2024-09-25",
+              organization_id: "normal-case",
+              reactivation: TRUE
+            }
+          - {
+              job_activation_id: "75bfd76edddbbc1dcb974cc893a238a3",
+              job_position_id: "1573753",
+              activated_date: "2024-09-30",
+              organization_id: "normal-case",
+              reactivation: FALSE
+            }
+          - {
+              job_activation_id: "aaa",
+              job_position_id: "123",
+              activated_date: "2024-09-20",
+              organization_id: "zero-scope",
+              reactivation: FALSE
+          }
+    expect:
+      rows:
+        - {
+            organization_id: "normal-case",
+            organization_name: "Test",
+            scope: "30.0",
+            term: "1",
+            start_date: "2024-09-16",
+            end_date: "2024-10-15", # 29 days after start date
+            job_position_usage: "3",
+            first_activations: "1",
+            reactivations: "2",
+            expected_usage: "6", # ((3 / 15) * 30) = 6
+            current_usage_vs_scope: "10", # 3 / 30 = 0.1
+            expected_usage_vs_scope: "20", # ((3 / 15) * 30) / 30 = 0.2 
+            updated_at: '2024-09-30 12:00:00.000000+00:00' # contract active for 15 days (half way)
+        }
+        - {
+            organization_id: "zero-scope",
+            organization_name: "Zero Scope",
+            scope: "0",
+            term: "12",
+            start_date: "2023-10-01",
+            end_date: "2024-09-30",
+            job_position_usage: "1",
+            first_activations: "1",
+            reactivations: "0",
+            expected_usage: "1",
+            current_usage_vs_scope: NULL,
+            expected_usage_vs_scope: NULL, 
+            updated_at: '2024-09-30 12:00:00.000000+00:00'
+        }
+        - {
+            organization_id: "no-activations",
+            organization_name: "No Activations",
+            scope: "100",
+            term: "12",
+            start_date: "2024-09-16",
+            end_date: "2025-09-15",
+            job_position_usage: "0",
+            first_activations: "0",
+            reactivations: "0",
+            expected_usage: "0",
+            current_usage_vs_scope: "0",
+            expected_usage_vs_scope: "0", 
+            updated_at: '2024-09-30 12:00:00.000000+00:00'
+        }
+
+  - name: test_job_position_state_full_refresh
+    model: staging__job_position_state
+    overrides:
+      macros:
+        is_incremental: false
+        run_started_at: '2024-09-30 12:00:00.000000+00:00'
+      vars:
+        end_date: "2020-04-01"
+    given:
+      - input: source('job_application_events', 'job_application_created')
+        rows:
+          - {
+            job_position_id: 1,
+            job_application_id: 11,
+            created_from: 'ALVA',
+            created_at: '2020-03-21 12:00:00.000000+00:00' # first activation event
+          }
+          - {
+            job_position_id: 2,
+            job_application_id: 21,
+            created_from: 'ALVA',
+            created_at: '2020-06-23 12:00:00.000000+00:00' # outside of time window
+          }
+          - {
+            job_position_id: 3,
+            job_application_id: 31,
+            created_from: 'RECOMMENDATION',
+            created_at: '2020-03-23 12:00:00.000000+00:00' # should be filtered out
+          }
+    expect:
+      rows:
+        - {
+          job_position_id: 1,
+          reactivation: false,
+          last_activation_date: "2020-03-21",
+          last_processed_timestamp: '2024-09-30 12:00:00.000000+00:00'
+        }
+
+  - name: test_job_position_state_incremental
+    model: staging__job_position_state
+    overrides:
+      macros:
+        is_incremental: true
+        run_started_at: '2024-10-01 12:00:00.000000+00:00'
+      vars:
+        end_date: "2020-07-01"
+    given:
+      - input: source('job_application_events', 'job_application_created')
+        rows:
+          - {
+            job_position_id: 1,
+            job_application_id: 11,
+            created_from: 'ALVA',
+            created_at: '2020-03-21 12:00:00.000000+00:00' # already in table
+          }
+          - {
+            job_position_id: 1,
+            job_application_id: 12,
+            created_from: 'ALVA',
+            created_at: '2020-06-22 12:00:00.000000+00:00' # should update state for job position 1
+          }
+          - {
+            job_position_id: 2,
+            job_application_id: 21,
+            created_from: 'ALVA',
+            created_at: '2020-06-23 12:00:00.000000+00:00' # should be added
+          }
+      - input: this
+        rows:
+          - {
+            job_position_id: 1,
+            job_application_id: 11,
+            reactivation: false,
+            last_activation_date: "2020-03-21",
+            last_processed_timestamp: '2024-09-30 12:00:00.000000+00:00'
+          }
+    expect:
+      # what will be inserted/merged into the table 
+      # (not what will end up in the table after the incremental run)
+      rows:
+        - {
+          job_position_id: 1,
+          job_application_id: 12,
+          reactivation: true,
+          last_activation_date: "2020-06-22",
+          last_processed_timestamp: '2024-10-01 12:00:00.000000+00:00'
+        }
+        - {
+          job_position_id: 2,
+          job_application_id: 21,
+          reactivation: false,
+          last_activation_date: "2020-06-23",
+          last_processed_timestamp: '2024-10-01 12:00:00.000000+00:00'
+        }
+  
+  - name: test_activation_events_full_refresh
+    model: fact_job_activations
+    overrides:
+      macros:
+        is_incremental: false
+      vars:
+        end_date: "2020-04-01"
+    given:
+      - input: ref("staging__job_position_state")
+        rows:
+          - {
+            job_position_id: 1,
+            reactivation: false,
+            last_activation_date: "2020-03-21",
+            last_processed_timestamp: '2024-09-30 12:00:00.000000+00:00'
+          }
+      - input: ref("staging__job_positions")
+        rows:
+          - {
+            job_position_id: 1,
+            organization_id: "a"
+          }
+    expect:
+      rows:
+        - {
+          job_position_id: 1,
+          activated_date: '2020-03-21',
+          reactivation: false,
+          organization_id: "a"
+        }
+
+  - name: test_job_activation_events_incremental
+    model: fact_job_activations
+    overrides:
+      macros:
+        is_incremental: true
+        run_started_at: '2024-10-01 12:00:00.000000+00:00'
+      vars:
+        end_date: "2020-07-01"
+    given:
+      - input: ref("staging__job_position_state")
+        rows:
+          - {
+            job_position_id: 1,
+            reactivation: true,
+            last_activation_date: "2020-06-22",
+            last_processed_timestamp: '2024-10-01 12:00:00.000000+00:00'
+          }
+          - {
+            job_position_id: 2,
+            reactivation: false,
+            last_activation_date: "2020-06-23",
+            last_processed_timestamp: '2024-10-01 12:00:00.000000+00:00'
+          }
+      - input: ref("staging__job_positions")
+        rows:
+          - {
+            job_position_id: 1,
+            organization_id: "a"
+          }
+          - {
+            job_position_id: 2,
+            organization_id: "a"
+          }
+      - input: this
+        rows:
+          - {
+            job_position_id: 1,
+            activated_date: "2020-03-21",
+            reactivation: false,
+            organization_id: "a"
+          }
+    expect:
+      # what will be inserted/merged into the table 
+      # (not what will end up in the table after the incremental run)
+      rows:
+        - {
+          job_position_id: 1,
+          activated_date: "2020-06-22",
+          reactivation: true,
+          organization_id: "a"
+        }
+        - {
+          job_position_id: 2,
+          activated_date: "2020-06-23",
+          reactivation: false,
+          organization_id: "a"
+        }
