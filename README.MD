@@ -3,17 +3,20 @@
 This is a template for creating new dbt projects with a standardized structure.
 
 ## Project Structure
+
+```
 project_name/
-├── analyses/
-├── macros/
-├── models/
-│ ├── core/
-│ ├── metrics/
-│ └── staging/
-├── seeds/
-├── snapshots/
-├── tests/
-└── dbt_project.yml
+  analyses/
+  macros/
+  models/
+    core/
+    metrics/
+    staging/
+  seeds/
+  snapshots/
+  tests/
+  dbt_project.yml
+```
 
 ## Getting Started
 

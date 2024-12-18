@@ -1,7 +1,7 @@
-name: 'job_position_usage'
+name: 'project_name'  # TODO: Change this to your project name
 version: '1.0.0'
 
-profile: 'job_position_usage'
+profile: 'project_name' # TODO: Change this to your project name
 
 model-paths: ["models"]
 analysis-paths: ["analyses"]
@@ -20,7 +20,7 @@ vars:
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 models:
-  job_position_usage:
+  project_name:  # TODO: Change this to your project name
     core:
       +materialized: table
     metrics:
