@@ -27,6 +27,12 @@ project_name/
    - Update `name` in `dbt_project.yml`
    - Update `profile` in `dbt_project.yml`
    - Update the models config section in `dbt_project.yml` to match your project name
+3. Update templated files:
+   - Search for and replace `project_name` in all files #TODO reimplement with Jinja? 
+   - Modify `models/schema.yml` with your model configurations
+   - Review and update any `.sql` files in the `models/` directory
+   - Update test cases in `tests/` directory 
+4. Set up a GCP service account and add the keyfile to the root of the project
 
 ### 2. Profile Configuration
 
@@ -37,9 +43,8 @@ project_name: # Should match the profile name in dbt_project.yml
 target: dev
 outputs:
 dev:
-type: [warehouse_type] # snowflake, bigquery, redshift, etc.
+type: bigquery
 ```
-
 
 ### 3. Project Structure
 
